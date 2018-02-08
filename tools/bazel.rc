@@ -1,0 +1,61 @@
+# Shut down the bazel server after 30 minutes of inactivity
+startup --max_idle_secs=1800
+
+# Always compute MD5 digests of files with multiple threads. Potential performance boost for SSDs
+build --experimental_multi_threaded_digest=true
+
+# Improved build progress UI. By default shows 3 concurrent actions in the progress bar.
+build --experimental_ui=true
+
+# Use external repositories for improved stability and speed when available
+build --experimental_external_repositories=true
+
+# Exclude targets with excessive, non actionable warnings
+build --output_filter='^//((?!(thirdparty|thirdparty/play/framework):(twitter4j-core|play|aws-java-sdk|axiom)).)*$'
+
+# Enable populating build info
+build --stamp
+
+# Set RMI hostname explicitly to localhost; otherwise it'll try to use the public IP of the
+# developer's machine, which generally doesn't work. This can affect anything using RMI, but for
+# our purposes most notably affects JMX-based monitoring/profiling tools, such as VisualVM.
+# Only the generated run script gets this option; deploy JARs are unchanged.
+build --jvmopt="-Djava.rmi.server.hostname=localhost"
+
+# Disable bytecode verification, so that bytecode rewriters such as VisualVM's profiler can work.
+# As above, this only affects the generated run script, not deploy jars.
+build --jvmopt="-Xverify:none"
+
+# Disable distinct host configuration so that we avoid rebuilding libraries twice
+build --distinct_host_configuration=false
+
+# Make it by default that tests show something when there are issues
+test --test_output=errors
+
+# Our software assumes a non-UTC system time zone
+test --test_env=TZ=America/New_York
+
+###########
+# Caching #
+###########
+# Pass --config=cache-$OFFICE to use these options
+
+# bazel-remote requires sha256 digest
+startup --host_jvm_args=-Dbazel.DigestFunction=sha256
+
+# github.com/buchgr/bazel-remote running on port 80
+build:cache-ny --remote_rest_cache=http://inf-baz01.office.com/
+build:cache-va --remote_rest_cache=http://inf-va-baz01.office.com/
+
+# Support sandboxing and local workers when building locally
+build:cache-ny --experimental_remote_spawn_cache
+build:cache-va --experimental_remote_spawn_cache
+
+# Restrict PATH to get cache hits across users / machines
+build --experimental_strict_action_env
+
+# Default PATH is /bin:/usr/bin, but we need /usr/local/bin for bundler
+build --action_env=PATH=/bin:/usr/bin:/usr/local/bin
+
+# Print errors interacting with the cache
+build --verbose_failures
